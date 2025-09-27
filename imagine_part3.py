@@ -1,7 +1,12 @@
     def _create_menus(self):
         """Set up the application menu bar and toolbar using Qt widgets."""
-        menubar = self.menuBar()
-        menubar.clear()
+        menubar = getattr(self, '_menubar', None)
+        if menubar is None:
+            menubar = QtWidgets.QMenuBar(self)
+            self.setMenuBar(menubar)
+            self._menubar = menubar
+        else:
+            menubar.clear()
 
         toolbar = getattr(self, '_main_toolbar', None)
         if toolbar is None:
