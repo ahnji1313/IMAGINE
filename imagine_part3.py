@@ -2,6 +2,10 @@
         """Set up the application menu bar and toolbar using Qt widgets."""
         menubar = self.menuBar()
         menubar.clear()
+        try:
+            menubar.setNativeMenuBar(False)
+        except AttributeError:
+            pass
         self._menubar = menubar
 
         toolbar = getattr(self, '_main_toolbar', None)
