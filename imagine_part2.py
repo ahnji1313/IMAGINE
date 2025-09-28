@@ -1,3 +1,20 @@
+from PySide6 import QtCore, QtGui, QtWidgets
+
+
+class _QtStringVar:
+    """Simple replacement for tkinter.StringVar while migrating to Qt."""
+
+    def __init__(self, value: str = ""):
+        self._value = value
+
+    def set(self, value: str) -> None:
+        self._value = value
+
+    def get(self) -> str:
+        return self._value
+
+    def __str__(self) -> str:
+        return self._value
                  visible: bool = True, font_size: float = 12.0, 
                  font_family: str = "Arial", font_weight: str = "normal", 
                  font_style: str = "normal"):
@@ -1046,26 +1063,36 @@ class TextLayer(Layer):
         self.apply_adjustments()
 
 
-class ImageEditor(tk.Tk):
+class ImageEditor(QtWidgets.QMainWindow):
     """Main application window for the image editor."""
 
     def __init__(self):
         super().__init__()
-        self.title("IMAGINE IMAGE EDITOR")
-        # Set a larger default size (90% of screen) for the editing window
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-        win_w = int(screen_w * 0.9)
-        win_h = int(screen_h * 0.9)
-        self.geometry(f"{win_w}x{win_h}")
-        # Apply ttk theme for a more modern look
-        style = ttk.Style(self)
-        try:
-            style.theme_use('clam')
-        except Exception:
-            pass
-        # Use a very light neutral background for a softer feel
-        self.configure(bg="#fafafa")
+        self.setWindowTitle("IMAGINE IMAGE EDITOR")
+        app = QtWidgets.QApplication.instance()
+        screen = app.primaryScreen() if app is not None else None
+        if screen is not None:
+            geometry = screen.availableGeometry()
+            win_w = int(geometry.width() * 0.9)
+            win_h = int(geometry.height() * 0.9)
+        else:
+            win_w = 1200
+            win_h = 800
+        self.resize(win_w, win_h)
+        if app is not None:
+            try:
+                app.setStyle("Fusion")
+            except Exception:
+                pass
+        self._central_widget = QtWidgets.QWidget(self)
+        self._central_layout = QtWidgets.QVBoxLayout(self._central_widget)
+        self._central_layout.setContentsMargins(0, 0, 0, 0)
+        self._central_layout.setSpacing(0)
+        self._central_widget.setStyleSheet("background-color: #fafafa;")
+        self.setCentralWidget(self._central_widget)
+        status_bar = self.statusBar()
+        if status_bar is not None:
+            status_bar.showMessage("Ready")
 
         # List of layers (bottom to top) - now supports multiple layer types
         self.layers: list[Union[Layer, VectorLayer, AdjustmentLayer]] = []
@@ -1085,7 +1112,7 @@ class ImageEditor(tk.Tk):
         self.autosave_after_id: str | None = None
         # Performance + workflow helpers
         self.performance_metrics = PerformanceMetrics()
-        self.status_var = tk.StringVar(value="Ready")
+        self.status_var = _QtStringVar("Ready")
         self.session_log: deque[str] = deque(maxlen=400)
         self._autosave_dir = ensure_directory(Path(os.path.expanduser("~")) / ".image_editor_drafts" / "autosave")
         self._autosave_lock = threading.Lock()
@@ -1158,18 +1185,25 @@ class ImageEditor(tk.Tk):
             pass
 
         # Set up GUI components
-        self._create_widgets()
+        try:
+            self._create_widgets()
+        except Exception:
+            # TODO: Rebuild widget creation using Qt equivalents.
+            pass
         self._load_extensions()
 
         # Toast container (for non-blocking notifications)
         self._toast_container = None
-        self._active_toasts: list[tk.Toplevel] = []
+        self._active_toasts: list[QtWidgets.QWidget] = []
 
         # Bind command palette
-        try:
-            self.bind_all("<Control-Shift-P>", self._open_command_palette)
-        except Exception:
-            pass
+        def _trigger_command_palette():
+            handler = getattr(self, "_open_command_palette", None)
+            if handler is not None:
+                handler(None)
+
+        self._command_palette_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Shift+P"), self)
+        self._command_palette_shortcut.activated.connect(_trigger_command_palette)
 
     # ------------------------------------------------------------------
     # GUI construction
