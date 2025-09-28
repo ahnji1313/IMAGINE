@@ -1,5 +1,6 @@
     def _create_menus(self):
-        """Set up the application menu bar and toolbar using Qt widgets."""
+        """Configure the application menu bar and toolbar using Qt widgets."""
+
         menubar = self.menuBar()
         menubar.clear()
         try:
@@ -8,10 +9,10 @@
             pass
         self._menubar = menubar
 
-        toolbar = getattr(self, '_main_toolbar', None)
+        toolbar = getattr(self, "_main_toolbar", None)
         if toolbar is None:
-            toolbar = QtWidgets.QToolBar('Main Toolbar', self)
-            toolbar.setObjectName('mainToolbar')
+            toolbar = QtWidgets.QToolBar("Main Toolbar", self)
+            toolbar.setObjectName("mainToolbar")
             toolbar.setMovable(False)
             toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
             self.addToolBar(QtCore.Qt.TopToolBarArea, toolbar)
@@ -19,348 +20,381 @@
         else:
             toolbar.clear()
 
-        def make_action(menu: QtWidgets.QMenu, label: str, handler, *, add_to_toolbar: bool = False, checkable: bool = False, shortcut: str | None = None) -> QtGui.QAction:
+        def make_action(
+            menu: QtWidgets.QMenu | None,
+            label: str,
+            callback,
+            *,
+            shortcut: str | None = None,
+            add_to_toolbar: bool = False,
+            checkable: bool = False,
+            pass_checked: bool = False,
+        ) -> QtGui.QAction:
             action = QtGui.QAction(label, self)
             action.setCheckable(checkable)
             if shortcut:
-                action.setShortcut(shortcut)
-            action.triggered.connect(handler)
-            menu.addAction(action)
+                action.setShortcut(QtGui.QKeySequence(shortcut))
+            if pass_checked:
+                action.triggered.connect(callback)
+            else:
+                action.triggered.connect(lambda checked=False, cb=callback: cb())
+            if menu is not None:
+                menu.addAction(action)
             if add_to_toolbar:
                 toolbar.addAction(action)
             return action
 
-        # File menu
-        file_menu = menubar.addMenu('File')
-        make_action(file_menu, 'Open Image...', lambda checked=False: self._open_image(), add_to_toolbar=True)
-        make_action(file_menu, 'Save As...', lambda checked=False: self._save_image(), add_to_toolbar=True)
-        make_action(file_menu, 'Quick Export Variants…', lambda checked=False: self._quick_export())
-        autosave_menu = file_menu.addMenu('Autosave')
+        # File menu -------------------------------------------------------
+        file_menu = menubar.addMenu("File")
+        make_action(file_menu, "Open Image…", self._open_image, shortcut="Ctrl+O", add_to_toolbar=True)
+        make_action(file_menu, "Save As…", self._save_image, shortcut="Ctrl+Shift+S", add_to_toolbar=True)
+        make_action(file_menu, "Quick Export Variants…", self._quick_export, shortcut="Ctrl+E")
+        autosave_menu = file_menu.addMenu("Autosave Interval")
         for label, seconds in (("Off", 0), ("30 seconds", 30), ("2 minutes", 120), ("5 minutes", 300)):
-            make_action(autosave_menu, label, lambda checked=False, s=seconds: self._set_autosave_interval(s))
-        make_action(file_menu, 'View Session Log', lambda checked=False: self._show_session_log())
+            make_action(autosave_menu, label, lambda s=seconds: self._set_autosave_interval(s))
+        make_action(file_menu, "View Session Log", self._show_session_log, shortcut="Ctrl+L")
         file_menu.addSeparator()
-        make_action(file_menu, 'Exit', lambda checked=False: self.close())
+        make_action(file_menu, "Exit", self.close, shortcut="Ctrl+Q")
 
-        # Edit menu
-        edit_menu = menubar.addMenu('Edit')
-        make_action(edit_menu, 'Undo', lambda checked=False: self._undo(), add_to_toolbar=True)
-        make_action(edit_menu, 'Redo', lambda checked=False: self._redo(), add_to_toolbar=True)
+        # Edit menu -------------------------------------------------------
+        edit_menu = menubar.addMenu("Edit")
+        make_action(edit_menu, "Undo", self._undo, shortcut="Ctrl+Z", add_to_toolbar=True)
+        make_action(edit_menu, "Redo", self._redo, shortcut="Ctrl+Shift+Z", add_to_toolbar=True)
         edit_menu.addSeparator()
-        make_action(edit_menu, 'Delete Layer', lambda checked=False: self._delete_layer())
-        make_action(edit_menu, 'Duplicate Layer', lambda checked=False: self._duplicate_layer())
+        make_action(edit_menu, "Delete Layer", self._delete_layer, shortcut="Del")
+        make_action(edit_menu, "Duplicate Layer", self._duplicate_layer, shortcut="Ctrl+D")
         edit_menu.addSeparator()
-        make_action(edit_menu, 'Move Layer Up', lambda checked=False: self._move_layer(-1))
-        make_action(edit_menu, 'Move Layer Down', lambda checked=False: self._move_layer(1))
+        make_action(edit_menu, "Move Layer Up", lambda: self._move_layer(-1), shortcut="Ctrl+Up")
+        make_action(edit_menu, "Move Layer Down", lambda: self._move_layer(1), shortcut="Ctrl+Down")
         edit_menu.addSeparator()
-        make_action(edit_menu, 'Merge Visible', lambda checked=False: self._merge_visible_layers())
+        make_action(edit_menu, "Merge Visible", self._merge_visible_layers, shortcut="Ctrl+Shift+M")
         edit_menu.addSeparator()
-        make_action(edit_menu, 'Brush Settings', lambda checked=False: self._show_brush_settings())
+        make_action(edit_menu, "Brush Settings", self._show_brush_settings, shortcut="Ctrl+B")
 
-        # Filters menu
-        filter_menu = menubar.addMenu('Filters')
-        make_action(filter_menu, 'Grayscale', lambda checked=False: self._preview_and_apply_filter('grayscale'))
-        make_action(filter_menu, 'Invert', lambda checked=False: self._preview_and_apply_filter('invert'))
-        make_action(filter_menu, 'Blur', lambda checked=False: self._preview_and_apply_filter('blur'))
-        make_action(filter_menu, 'Sharpen', lambda checked=False: self._preview_and_apply_filter('sharpen'))
-        filter_menu.addSeparator()
-        make_action(filter_menu, 'Emboss', lambda checked=False: self._preview_and_apply_filter('emboss'))
-        make_action(filter_menu, 'Edge Enhance', lambda checked=False: self._preview_and_apply_filter('edge'))
-        make_action(filter_menu, 'Contour', lambda checked=False: self._preview_and_apply_filter('contour'))
-        make_action(filter_menu, 'Detail', lambda checked=False: self._preview_and_apply_filter('detail'))
-        make_action(filter_menu, 'Smooth', lambda checked=False: self._preview_and_apply_filter('smooth'))
-        make_action(filter_menu, 'Mirror Horizontal', lambda checked=False: self._preview_and_apply_filter('mirror_horizontal'))
-        make_action(filter_menu, 'Mirror Vertical', lambda checked=False: self._preview_and_apply_filter('mirror_vertical'))
-        make_action(filter_menu, 'Liquify (Swirl)', lambda checked=False: self._preview_and_apply_filter('liquify'))
-        liquify_menu = filter_menu.addMenu('Liquify Tools')
-        for label, mode in [("Push", "push"), ("Pull", "pull"), ("Bloat", "bloat"), ("Pucker", "pucker")]:
-            make_action(liquify_menu, label, lambda checked=False, m=mode: self._apply_liquify_dialog(m))
-        filter_menu.addSeparator()
-        make_action(filter_menu, 'Sepia', lambda checked=False: self._preview_and_apply_filter('sepia'))
-        make_action(filter_menu, 'Skin Smooth', lambda checked=False: self._preview_and_apply_filter('skin smooth'))
-        make_action(filter_menu, 'Warm Tone', lambda checked=False: self._preview_and_apply_filter('warm'))
-        make_action(filter_menu, 'Cool Tone', lambda checked=False: self._preview_and_apply_filter('cool'))
-        make_action(filter_menu, 'Vintage', lambda checked=False: self._preview_and_apply_filter('vintage'))
-        filter_menu.addSeparator()
-        make_action(filter_menu, 'Anime Style', lambda checked=False: self._preview_and_apply_filter('anime'))
-        make_action(filter_menu, 'Oil Painting', lambda checked=False: self._preview_and_apply_filter('oil'))
-        make_action(filter_menu, 'Cyberpunk Tone', lambda checked=False: self._preview_and_apply_filter('cyberpunk'))
-        make_action(filter_menu, 'Portrait Optimize', lambda checked=False: self._preview_and_apply_filter('portrait optimize'))
-        make_action(filter_menu, 'Replace Background', lambda checked=False: self._replace_background())
-        make_action(filter_menu, 'Poster Edges', lambda checked=False: self._preview_and_apply_filter('poster_edges'))
-        make_action(filter_menu, 'Posterize', lambda checked=False: self._preview_and_apply_filter('posterize'))
-        make_action(filter_menu, 'Solarize', lambda checked=False: self._preview_and_apply_filter('solarize'))
-        filter_menu.addSeparator()
-        make_action(filter_menu, 'Adjustable Blur', lambda checked=False: self._adjustable_blur())
-        make_action(filter_menu, 'Adjustable Sharpen', lambda checked=False: self._adjustable_sharpen())
-        make_action(filter_menu, 'Adjustable Sepia', lambda checked=False: self._adjustable_sepia())
+        # Transform menu --------------------------------------------------
+        transform_menu = menubar.addMenu("Transform")
+        make_action(transform_menu, "Rotate 90° CW", lambda: self._rotate_layer(90), shortcut="Ctrl+R")
+        make_action(transform_menu, "Rotate 180°", lambda: self._rotate_layer(180), shortcut="Ctrl+Shift+Alt+R")
+        make_action(transform_menu, "Rotate 270° CW", lambda: self._rotate_layer(270), shortcut="Ctrl+Alt+R")
+        transform_menu.addSeparator()
+        make_action(transform_menu, "Flip Horizontal", lambda: self._flip_layer("horizontal"), shortcut="Ctrl+H")
+        make_action(transform_menu, "Flip Vertical", lambda: self._flip_layer("vertical"), shortcut="Ctrl+Alt+H")
+        transform_menu.addSeparator()
+        make_action(transform_menu, "Resize Canvas (Scale Images)", self._resize_canvas)
+        make_action(transform_menu, "Resize Canvas (No Scaling)", self._resize_canvas_no_scale)
+        transform_menu.addSeparator()
+        make_action(transform_menu, "Perspective Transform", self._perspective_transform_layer)
+        make_action(transform_menu, "Warp (Sine)", self._warp_layer)
+        make_action(transform_menu, "Face Ratio Adjust", self._face_ratio_adjust_layer)
+        make_action(transform_menu, "Free Distort", self._free_distort_layer)
+        transform_menu.addSeparator()
+        make_action(transform_menu, "Upscale Layer (2×)", lambda: self._scale_layer(2.0), shortcut="Ctrl+Alt+Up")
+        make_action(transform_menu, "Downscale Layer (0.5×)", lambda: self._scale_layer(0.5), shortcut="Ctrl+Alt+Down")
+        transform_menu.addSeparator()
+        make_action(transform_menu, "Resize Layer (Width/Height)…", self._transform_resize_layer_dialog)
+        make_action(transform_menu, "Resize Selection…", self._transform_resize_selection_dialog)
+        transform_menu.addSeparator()
+        make_action(transform_menu, "Rotate Custom…", self._transform_rotate_custom_dialog)
+        make_action(transform_menu, "Scale Custom…", self._transform_scale_custom_dialog)
 
-        # Canva inspired quick presets
-        canva_menu = menubar.addMenu('Canva')
-        for label, preset in [
-            ('Duotone', 'duotone'),
-            ('Glow', 'glow'),
-            ('Cinematic', 'cinematic'),
-            ('Neon', 'neon'),
-            ('Film Grain', 'film_grain'),
-            ('HDR Boost', 'hdr'),
-            ('Retro Fade', 'retro'),
-            ('Summer Warmth', 'summer'),
-            ('Winter Chill', 'winter'),
-            ('Vignette', 'vignette'),
-            ('Background Blur', 'background_blur'),
-        ]:
-            make_action(canva_menu, label, lambda checked=False, p=preset: self._apply_canva_preset(p))
-
-        # Auto menu
-        auto_menu = menubar.addMenu('Auto')
-        make_action(auto_menu, 'Auto Enhance', lambda checked=False: self._auto_enhance_layer())
-        make_action(auto_menu, 'One Click Beauty', lambda checked=False: self._one_click_beauty())
-        make_action(auto_menu, 'Remove Background', lambda checked=False: self._remove_background())
-
-        # Layer menu
-        layer_menu = menubar.addMenu('Layer')
-        make_action(layer_menu, 'New Layer', lambda checked=False: self._new_layer())
-        make_action(layer_menu, 'New Vector Layer', lambda checked=False: self._new_vector_layer())
-        make_action(layer_menu, 'New Adjustment Layer', lambda checked=False: self._new_adjustment_layer())
-        layer_menu.addSeparator()
-        make_action(layer_menu, 'Delete Layer', lambda checked=False: self._delete_layer())
-        make_action(layer_menu, 'Duplicate Layer', lambda checked=False: self._duplicate_layer())
-        layer_menu.addSeparator()
-        make_action(layer_menu, 'Move Layer Up', lambda checked=False: self._move_layer(-1))
-        make_action(layer_menu, 'Move Layer Down', lambda checked=False: self._move_layer(1))
-        layer_menu.addSeparator()
-        make_action(layer_menu, 'Merge Visible', lambda checked=False: self._merge_visible_layers())
-
-        # Vector Tools menu
-        vector_menu = menubar.addMenu('Vector Tools')
-        make_action(vector_menu, 'Rectangle', lambda checked=False: self._select_vector_rectangle())
-        make_action(vector_menu, 'Circle', lambda checked=False: self._select_vector_circle())
-        make_action(vector_menu, 'Ellipse', lambda checked=False: self._select_vector_ellipse())
-        make_action(vector_menu, 'Line', lambda checked=False: self._select_vector_line())
-        make_action(vector_menu, 'Text', lambda checked=False: self._select_vector_text())
-
-        # Macro menu
-        macro_menu = menubar.addMenu('Macro')
-        make_action(macro_menu, 'Start Recording', lambda checked=False: self._start_macro_recording())
-        make_action(macro_menu, 'Stop Recording', lambda checked=False: self._stop_macro_recording())
+        # Macro menu ------------------------------------------------------
+        macro_menu = menubar.addMenu("Macro")
+        make_action(macro_menu, "Start Recording", self._start_macro_recording, shortcut="Ctrl+Shift+R")
+        make_action(macro_menu, "Stop Recording", self._stop_macro_recording)
         macro_menu.addSeparator()
-        make_action(macro_menu, 'Play Macro', lambda checked=False: self._play_macro())
+        make_action(macro_menu, "Play Macro", self._play_macro, shortcut="Ctrl+Shift+P")
         macro_menu.addSeparator()
-        make_action(macro_menu, 'Save Macro', lambda checked=False: self._save_macro())
-        make_action(macro_menu, 'Load Macro', lambda checked=False: self._load_macro())
+        make_action(macro_menu, "Save Macro", self._save_macro)
+        make_action(macro_menu, "Load Macro", self._load_macro)
 
-        # Transform menu helpers
-        def _resize_layer_custom():
-            if self.current_layer_index is None:
-                messagebox.showinfo('Resize Layer', 'No layer selected.')
-                return
-            layer = self.layers[self.current_layer_index]
-            if not isinstance(layer, Layer):
-                messagebox.showinfo('Resize Layer', 'Resize only supported for raster layers.')
-                return
-            w = simpledialog.askinteger('Resize Layer', 'Enter new width (px):', parent=self, minvalue=1)
-            if w is None:
-                return
-            h = simpledialog.askinteger('Resize Layer', 'Enter new height (px):', parent=self, minvalue=1)
-            if h is None:
-                return
-            try:
-                self._current_action_desc = f'Resize Layer {layer.name} to {w}×{h}'
-                self._save_history()
-                try:
-                    resample = Image.Resampling.LANCZOS  # type: ignore[attr-defined]
-                except Exception:
-                    resample = Image.ANTIALIAS
-                layer.original = layer.original.resize((w, h), resample)
-                try:
-                    layer.mask = layer.mask.resize((w, h), resample)
-                except Exception:
-                    layer.mask = Image.new('L', (w, h), 255)
-                layer.offset = (0, 0)
-                layer.apply_adjustments()
-                self._update_composite()
-            except Exception as e:
-                messagebox.showerror('Resize Layer', f'Resize failed: {e}')
-
-        def _resize_selection_dialog():
-            if not hasattr(self, '_last_selection_mask') or self._last_selection_mask is None:
-                messagebox.showinfo('Resize Selection', 'No active selection to resize.')
-                return
-            sel_bbox = self._last_selection_mask.getbbox()
-            if not sel_bbox:
-                messagebox.showinfo('Resize Selection', 'Selection is empty.')
-                return
-            sw = simpledialog.askinteger('Selection Width', 'Enter new width (px):', parent=self, minvalue=1, initialvalue=sel_bbox[2]-sel_bbox[0])
-            if sw is None:
-                return
-            sh = simpledialog.askinteger('Selection Height', 'Enter new height (px):', parent=self, minvalue=1, initialvalue=sel_bbox[3]-sel_bbox[1])
-            if sh is None:
-                return
-            keep_aspect = messagebox.askyesno('Keep Aspect', 'Keep aspect ratio for selection?')
-            try:
-                self._current_action_desc = f'Resize Selection to {sw}×{sh}'
-                self._save_history()
-                layer = self.layers[self.current_layer_index] if self.current_layer_index is not None else None
-                if layer is None:
-                    messagebox.showinfo('Resize Selection', 'No active layer for selection.')
-                    return
-                src_img = layer.original
-                bbox = sel_bbox
-                region = src_img.crop(bbox)
-                if keep_aspect:
-                    rw, rh = region.size
-                    scale = min(sw / rw, sh / rh)
-                    tw = max(1, int(rw * scale))
-                    th = max(1, int(rh * scale))
-                else:
-                    tw, th = sw, sh
-                try:
-                    resample = Image.Resampling.LANCZOS
-                except Exception:
-                    resample = Image.ANTIALIAS
-                resized_region = region.resize((tw, th), resample)
-                float_img = Image.new('RGBA', src_img.size, (0, 0, 0, 0))
-                float_img.paste(resized_region, bbox[:2], resized_region)
-                float_layer = Layer(float_img, f'Selection {len(self.layers)}')
-                self.layers.append(float_layer)
-                self.current_layer_index = len(self.layers) - 1
-                self._refresh_layer_list()
-                self._update_composite()
-            except Exception as e:
-                messagebox.showerror('Resize Selection', f'Failed: {e}')
-
-        def _rotate_custom():
-            angle = simpledialog.askstring('Rotate Custom', 'Enter angle in degrees (integer):', parent=self)
-            if angle is None:
-                return
-            try:
-                degrees = int(angle)
-            except Exception:
-                messagebox.showerror('Rotate Custom', 'Please enter a valid integer angle.')
-                return
-            self._current_action_desc = f'Rotate {degrees}°'
-            self._rotate_layer(degrees)
-            self._update_composite()
-
-        def _scale_custom():
-            val = simpledialog.askstring('Scale Custom', 'Enter scale factor (e.g. 0.7 for 70%, 1.2 for 120%):', parent=self)
-            if val is None:
-                return
-            try:
-                factor = float(val)
-            except Exception:
-                messagebox.showerror('Scale Custom', 'Please enter a valid number for scale factor.')
-                return
-            if factor <= 0:
-                messagebox.showerror('Scale Custom', 'Scale factor must be greater than zero.')
-                return
-            self._current_action_desc = f'Scale {factor}×'
-            self._scale_layer(factor)
-            self._update_composite()
-
-        transform_menu = menubar.addMenu('Transform')
-        make_action(transform_menu, 'Rotate 90° CW', lambda checked=False: self._rotate_layer(90))
-        make_action(transform_menu, 'Rotate 180°', lambda checked=False: self._rotate_layer(180))
-        make_action(transform_menu, 'Rotate 270° CW', lambda checked=False: self._rotate_layer(270))
-        transform_menu.addSeparator()
-        make_action(transform_menu, 'Flip Horizontal', lambda checked=False: self._flip_layer('horizontal'))
-        make_action(transform_menu, 'Flip Vertical', lambda checked=False: self._flip_layer('vertical'))
-        transform_menu.addSeparator()
-        make_action(transform_menu, 'Resize Canvas (Scale Images)', lambda checked=False: self._resize_canvas())
-        make_action(transform_menu, 'Resize Canvas (No Scaling)', lambda checked=False: self._resize_canvas_no_scale())
-        transform_menu.addSeparator()
-        make_action(transform_menu, 'Perspective Transform', lambda checked=False: self._perspective_transform_layer())
-        make_action(transform_menu, 'Warp (Sine)', lambda checked=False: self._warp_layer())
-        make_action(transform_menu, 'Face Ratio Adjust', lambda checked=False: self._face_ratio_adjust_layer())
-        make_action(transform_menu, 'Free Distort', lambda checked=False: self._free_distort_layer())
-        transform_menu.addSeparator()
-        make_action(transform_menu, 'Upscale Layer (2×)', lambda checked=False: self._scale_layer(2.0))
-        make_action(transform_menu, 'Downscale Layer (0.5×)', lambda checked=False: self._scale_layer(0.5))
-        transform_menu.addSeparator()
-        make_action(transform_menu, 'Resize Layer (Width/Height)…', lambda checked=False: _resize_layer_custom())
-        make_action(transform_menu, 'Resize Selection…', lambda checked=False: _resize_selection_dialog())
-        transform_menu.addSeparator()
-        make_action(transform_menu, 'Rotate Custom…', lambda checked=False: _rotate_custom())
-        make_action(transform_menu, 'Scale Custom…', lambda checked=False: _scale_custom())
-
-        # Professional feature set menu
-        pro_menu = menubar.addMenu('Pro')
-        make_action(pro_menu, 'High Pass Sharpen…', lambda checked=False: self._apply_high_pass_sharpen())
-        make_action(pro_menu, 'Unblur / Deblur…', lambda checked=False: self._apply_unblur())
-        make_action(pro_menu, 'Add Focus Peaking Overlay', lambda checked=False: self._focus_peaking_overlay())
-        make_action(pro_menu, 'Frequency Separation Panel…', lambda checked=False: self._open_frequency_separation_panel())
-        make_action(pro_menu, 'Frequency Separation Layers…', lambda checked=False: self._frequency_separation_layer())
-        make_action(pro_menu, 'Content-Aware Fill', lambda checked=False: self._content_aware_fill())
+        # Pro menu --------------------------------------------------------
+        pro_menu = menubar.addMenu("Pro")
+        make_action(pro_menu, "High Pass Sharpen…", self._apply_high_pass_sharpen)
+        make_action(pro_menu, "Unblur / Deblur…", self._apply_unblur)
+        make_action(pro_menu, "Add Focus Peaking Overlay", self._focus_peaking_overlay)
+        make_action(pro_menu, "Frequency Separation Panel…", self._open_frequency_separation_panel)
+        make_action(pro_menu, "Frequency Separation Layers…", self._frequency_separation_layer)
+        make_action(pro_menu, "Content-Aware Fill", self._content_aware_fill)
         pro_menu.addSeparator()
-        make_action(pro_menu, 'Precise Lighting & Color…', lambda checked=False: self._open_precise_lighting_panel())
-        make_action(pro_menu, 'Show Histogram', lambda checked=False: self._show_histogram())
-        make_action(pro_menu, 'Generate Contact Sheet…', lambda checked=False: self._generate_contact_sheet())
+        make_action(pro_menu, "Precise Lighting & Color…", self._open_precise_lighting_panel)
+        make_action(pro_menu, "Show Histogram", self._show_histogram, shortcut="Ctrl+Shift+H")
+        make_action(pro_menu, "Generate Contact Sheet…", self._generate_contact_sheet)
 
-        # Selection menu
-        select_menu = menubar.addMenu('Select')
-        make_action(select_menu, 'Select Subject', lambda checked=False: self._select_subject())
-        make_action(select_menu, 'Expand Selection…', lambda checked=False: self._expand_selection_cmd())
-        make_action(select_menu, 'Refine Edge…', lambda checked=False: self._refine_edge_tool())
-        make_action(select_menu, 'Make Cutline…', lambda checked=False: self._make_cutline_cmd())
+        # Select menu -----------------------------------------------------
+        select_menu = menubar.addMenu("Select")
+        make_action(select_menu, "Select Subject", self._select_subject, shortcut="Ctrl+Shift+S")
+        make_action(select_menu, "Expand Selection…", self._expand_selection_cmd)
+        make_action(select_menu, "Refine Edge…", self._refine_edge_tool)
+        make_action(select_menu, "Make Cutline…", self._make_cutline_cmd)
 
-        # Blend mode menu
-        blend_menu = menubar.addMenu('Blend Mode')
-        make_action(blend_menu, 'Normal', lambda checked=False: self._set_blend_mode('normal'))
-        make_action(blend_menu, 'Multiply', lambda checked=False: self._set_blend_mode('multiply'))
-        make_action(blend_menu, 'Screen', lambda checked=False: self._set_blend_mode('screen'))
-        make_action(blend_menu, 'Overlay', lambda checked=False: self._set_blend_mode('overlay'))
-        make_action(blend_menu, 'Soft Light', lambda checked=False: self._set_blend_mode('softlight'))
+        # Blend mode menu -------------------------------------------------
+        blend_menu = menubar.addMenu("Blend Mode")
+        make_action(blend_menu, "Normal", lambda: self._set_blend_mode("normal"))
+        make_action(blend_menu, "Multiply", lambda: self._set_blend_mode("multiply"))
+        make_action(blend_menu, "Screen", lambda: self._set_blend_mode("screen"))
+        make_action(blend_menu, "Overlay", lambda: self._set_blend_mode("overlay"))
+        make_action(blend_menu, "Soft Light", lambda: self._set_blend_mode("softlight"))
 
-        # View menu
-        view_menu = menubar.addMenu('View')
-        make_action(view_menu, 'Toggle Layer Visibility', lambda checked=False: self._toggle_visibility())
+        # View menu -------------------------------------------------------
+        view_menu = menubar.addMenu("View")
+        make_action(view_menu, "Toggle Layer Visibility", self._toggle_visibility, shortcut="Ctrl+Shift+V")
 
-        # History menu
-        history_menu = menubar.addMenu('History')
-        make_action(history_menu, 'Show History Panel', lambda checked=False: self._show_history_panel())
+        # History menu ----------------------------------------------------
+        history_menu = menubar.addMenu("History")
+        make_action(history_menu, "Show History Panel", self._show_history_panel, shortcut="Ctrl+Shift+Y")
 
-        # Settings menu
-        settings_menu = menubar.addMenu('Settings')
-        make_action(settings_menu, 'Toggle Dark/Light Theme', lambda checked=False: self._toggle_theme())
-        make_action(settings_menu, 'Set Autosave Interval', lambda checked=False: self._set_autosave_interval())
+        # Settings menu ---------------------------------------------------
+        settings_menu = menubar.addMenu("Settings")
+        make_action(settings_menu, "Toggle Dark/Light Theme", self._toggle_theme, shortcut="Ctrl+Alt+T")
+        make_action(settings_menu, "Set Autosave Interval", self._set_autosave_interval, shortcut="Ctrl+Shift+A")
 
-        # Help menu
-        help_menu = menubar.addMenu('Help')
-        make_action(help_menu, 'User Guide', lambda checked=False: self._show_help())
+        # Filters menu ----------------------------------------------------
+        filter_menu = menubar.addMenu("Filters")
+        make_action(filter_menu, "Grayscale", lambda: self._preview_and_apply_filter("grayscale"))
+        make_action(filter_menu, "Invert", lambda: self._preview_and_apply_filter("invert"))
+        make_action(filter_menu, "Blur", lambda: self._preview_and_apply_filter("blur"))
+        make_action(filter_menu, "Sharpen", lambda: self._preview_and_apply_filter("sharpen"))
+        filter_menu.addSeparator()
+        make_action(filter_menu, "Emboss", lambda: self._preview_and_apply_filter("emboss"))
+        make_action(filter_menu, "Edge Enhance", lambda: self._preview_and_apply_filter("edge"))
+        make_action(filter_menu, "Contour", lambda: self._preview_and_apply_filter("contour"))
+        make_action(filter_menu, "Detail", lambda: self._preview_and_apply_filter("detail"))
+        make_action(filter_menu, "Smooth", lambda: self._preview_and_apply_filter("smooth"))
+        make_action(filter_menu, "Mirror Horizontal", lambda: self._preview_and_apply_filter("mirror_horizontal"))
+        make_action(filter_menu, "Mirror Vertical", lambda: self._preview_and_apply_filter("mirror_vertical"))
+        make_action(filter_menu, "Liquify (Swirl)", lambda: self._preview_and_apply_filter("liquify"))
+        liquify_menu = filter_menu.addMenu("Liquify Tools")
+        for label, mode in (("Push", "push"), ("Pull", "pull"), ("Bloat", "bloat"), ("Pucker", "pucker")):
+            make_action(liquify_menu, label, lambda m=mode: self._apply_liquify_dialog(m))
+        filter_menu.addSeparator()
+        make_action(filter_menu, "Sepia", lambda: self._preview_and_apply_filter("sepia"))
+        make_action(filter_menu, "Skin Smooth", lambda: self._preview_and_apply_filter("skin smooth"))
+        make_action(filter_menu, "Warm Tone", lambda: self._preview_and_apply_filter("warm"))
+        make_action(filter_menu, "Cool Tone", lambda: self._preview_and_apply_filter("cool"))
+        make_action(filter_menu, "Vintage", lambda: self._preview_and_apply_filter("vintage"))
+        filter_menu.addSeparator()
+        make_action(filter_menu, "Anime Style", lambda: self._preview_and_apply_filter("anime"))
+        make_action(filter_menu, "Oil Painting", lambda: self._preview_and_apply_filter("oil"))
+        make_action(filter_menu, "Cyberpunk Tone", lambda: self._preview_and_apply_filter("cyberpunk"))
+        make_action(filter_menu, "Portrait Optimize", lambda: self._preview_and_apply_filter("portrait optimize"))
+        make_action(filter_menu, "Replace Background", self._replace_background)
+        make_action(filter_menu, "Poster Edges", lambda: self._preview_and_apply_filter("poster_edges"))
+        make_action(filter_menu, "Posterize", lambda: self._preview_and_apply_filter("posterize"))
+        make_action(filter_menu, "Solarize", lambda: self._preview_and_apply_filter("solarize"))
+        filter_menu.addSeparator()
+        make_action(filter_menu, "Adjustable Blur", self._adjustable_blur)
+        make_action(filter_menu, "Adjustable Sharpen", self._adjustable_sharpen)
+        make_action(filter_menu, "Adjustable Sepia", self._adjustable_sepia)
 
-        # Extensions menu
-        self.extensions_menu = menubar.addMenu('Extensions')
-        make_action(self.extensions_menu, 'Load Extension…', lambda checked=False: self._prompt_extension_upload())
+        # Canva inspired quick presets -----------------------------------
+        canva_menu = menubar.addMenu("Canva")
+        for label, preset in (
+            ("Duotone", "duotone"),
+            ("Glow", "glow"),
+            ("Cinematic", "cinematic"),
+            ("Neon", "neon"),
+            ("Film Grain", "film_grain"),
+            ("HDR Boost", "hdr"),
+            ("Retro Fade", "retro"),
+            ("Summer Warmth", "summer"),
+            ("Winter Chill", "winter"),
+            ("Vignette", "vignette"),
+            ("Background Blur", "background_blur"),
+        ):
+            make_action(canva_menu, label, lambda p=preset: self._apply_canva_preset(p))
 
-        # Export menu
-        export_menu = menubar.addMenu('Export')
-        make_action(export_menu, 'Instagram (1080×1080)', lambda checked=False: self._export_preset(1080, 1080))
-        make_action(export_menu, 'Twitter 16:9 (1920×1080)', lambda checked=False: self._export_preset(1920, 1080))
-        make_action(export_menu, 'Facebook Cover (820×312)', lambda checked=False: self._export_preset(820, 312))
+        # Auto menu -------------------------------------------------------
+        auto_menu = menubar.addMenu("Auto")
+        make_action(auto_menu, "Auto Enhance", self._auto_enhance_layer)
+        make_action(auto_menu, "One Click Beauty", self._one_click_beauty)
+        make_action(auto_menu, "Remove Background", self._remove_background)
 
-        # Collage menu
-        collage_menu = menubar.addMenu('Collage')
-        make_action(collage_menu, 'Create Collage from Files', lambda checked=False: self._create_collage_from_files())
-        make_action(collage_menu, 'Layout Visible Layers as Collage', lambda checked=False: self._layout_visible_layers())
-        make_action(collage_menu, 'Create Collage (Advanced)', lambda checked=False: self._create_collage_advanced())
-        make_action(collage_menu, 'Auto Balance Layers', lambda checked=False: self._auto_balance_layers())
+        # Layer menu ------------------------------------------------------
+        layer_menu = menubar.addMenu("Layer")
+        make_action(layer_menu, "New Layer", self._new_layer, shortcut="Ctrl+Shift+N")
+        make_action(layer_menu, "New Vector Layer", self._new_vector_layer)
+        make_action(layer_menu, "New Adjustment Layer", self._new_adjustment_layer)
+        layer_menu.addSeparator()
+        make_action(layer_menu, "Delete Layer", self._delete_layer)
+        make_action(layer_menu, "Duplicate Layer", self._duplicate_layer)
+        layer_menu.addSeparator()
+        make_action(layer_menu, "Move Layer Up", lambda: self._move_layer(-1))
+        make_action(layer_menu, "Move Layer Down", lambda: self._move_layer(1))
+        layer_menu.addSeparator()
+        make_action(layer_menu, "Merge Visible", self._merge_visible_layers)
 
-        # Templates menu
-        templates_menu = menubar.addMenu('Templates')
-        make_action(templates_menu, '2×2 Grid', lambda checked=False: self._create_template_layout('2x2'))
-        make_action(templates_menu, '3×3 Grid', lambda checked=False: self._create_template_layout('3x3'))
-        make_action(templates_menu, '1×3 Horizontal', lambda checked=False: self._create_template_layout('1x3h'))
-        make_action(templates_menu, '3×1 Vertical', lambda checked=False: self._create_template_layout('3x1v'))
-        make_action(templates_menu, 'Random Mosaic', lambda checked=False: self._create_template_layout('random'))
+        # Vector Tools menu ----------------------------------------------
+        vector_menu = menubar.addMenu("Vector Tools")
+        make_action(vector_menu, "Rectangle", self._select_vector_rectangle)
+        make_action(vector_menu, "Circle", self._select_vector_circle)
+        make_action(vector_menu, "Ellipse", self._select_vector_ellipse)
+        make_action(vector_menu, "Line", self._select_vector_line)
+        make_action(vector_menu, "Text", self._select_vector_text)
 
-        # Drafts menu
-        drafts_menu = menubar.addMenu('Drafts')
-        make_action(drafts_menu, 'Save Draft', lambda checked=False: self._save_draft())
-        make_action(drafts_menu, 'Load Draft', lambda checked=False: self._load_draft())
-        make_action(drafts_menu, 'Delete All Drafts', lambda checked=False: self._delete_all_drafts())
+        # Help menu -------------------------------------------------------
+        help_menu = menubar.addMenu("Help")
+        make_action(help_menu, "User Guide", self._show_help)
+
+        # Extensions menu -------------------------------------------------
+        self.extensions_menu = menubar.addMenu("Extensions")
+        make_action(self.extensions_menu, "Load Extension…", self._prompt_extension_upload)
+
+        # Export menu -----------------------------------------------------
+        export_menu = menubar.addMenu("Export")
+        make_action(export_menu, "Instagram (1080×1080)", lambda: self._export_preset(1080, 1080))
+        make_action(export_menu, "Twitter 16:9 (1920×1080)", lambda: self._export_preset(1920, 1080))
+        make_action(export_menu, "Facebook Cover (820×312)", lambda: self._export_preset(820, 312))
+
+        # Collage menu ----------------------------------------------------
+        collage_menu = menubar.addMenu("Collage")
+        make_action(collage_menu, "Create Collage from Files", self._create_collage_from_files)
+        make_action(collage_menu, "Layout Visible Layers as Collage", self._layout_visible_layers)
+        make_action(collage_menu, "Create Collage (Advanced)", self._create_collage_advanced)
+        make_action(collage_menu, "Auto Balance Layers", self._auto_balance_layers)
+
+        # Templates menu --------------------------------------------------
+        templates_menu = menubar.addMenu("Templates")
+        make_action(templates_menu, "2×2 Grid", lambda: self._create_template_layout("2x2"))
+        make_action(templates_menu, "3×3 Grid", lambda: self._create_template_layout("3x3"))
+        make_action(templates_menu, "1×3 Horizontal", lambda: self._create_template_layout("1x3h"))
+        make_action(templates_menu, "3×1 Vertical", lambda: self._create_template_layout("3x1v"))
+        make_action(templates_menu, "Random Mosaic", lambda: self._create_template_layout("random"))
+
+        # Drafts menu -----------------------------------------------------
+        drafts_menu = menubar.addMenu("Drafts")
+        make_action(drafts_menu, "Save Draft", self._save_draft)
+        make_action(drafts_menu, "Load Draft", self._load_draft)
+        make_action(drafts_menu, "Delete All Drafts", self._delete_all_drafts)
 
         self._apply_theme()
+
+    def _transform_resize_layer_dialog(self) -> None:
+        if self.current_layer_index is None:
+            messagebox.showinfo("Resize Layer", "No layer selected.")
+            return
+        layer = self.layers[self.current_layer_index]
+        if not isinstance(layer, Layer):
+            messagebox.showinfo("Resize Layer", "Resize only supported for raster layers.")
+            return
+        w = simpledialog.askinteger("Resize Layer", "Enter new width (px):", parent=self, minvalue=1)
+        if w is None:
+            return
+        h = simpledialog.askinteger("Resize Layer", "Enter new height (px):", parent=self, minvalue=1)
+        if h is None:
+            return
+        try:
+            self._current_action_desc = f"Resize Layer {layer.name} to {w}×{h}"
+            self._save_history()
+            try:
+                resample = Image.Resampling.LANCZOS  # type: ignore[attr-defined]
+            except Exception:
+                resample = Image.ANTIALIAS
+            layer.original = layer.original.resize((w, h), resample)
+            try:
+                layer.mask = layer.mask.resize((w, h), resample)
+            except Exception:
+                layer.mask = Image.new("L", (w, h), 255)
+            layer.offset = (0, 0)
+            layer.apply_adjustments()
+            self._update_composite()
+        except Exception as exc:
+            messagebox.showerror("Resize Layer", f"Resize failed: {exc}")
+
+    def _transform_resize_selection_dialog(self) -> None:
+        if not hasattr(self, "_last_selection_mask") or self._last_selection_mask is None:
+            messagebox.showinfo("Resize Selection", "No active selection to resize.")
+            return
+        sel_bbox = self._last_selection_mask.getbbox()
+        if not sel_bbox:
+            messagebox.showinfo("Resize Selection", "Selection is empty.")
+            return
+        sw = simpledialog.askinteger(
+            "Selection Width",
+            "Enter new width (px):",
+            parent=self,
+            minvalue=1,
+            initialvalue=sel_bbox[2] - sel_bbox[0],
+        )
+        if sw is None:
+            return
+        sh = simpledialog.askinteger(
+            "Selection Height",
+            "Enter new height (px):",
+            parent=self,
+            minvalue=1,
+            initialvalue=sel_bbox[3] - sel_bbox[1],
+        )
+        if sh is None:
+            return
+        keep_aspect = messagebox.askyesno("Keep Aspect", "Keep aspect ratio for selection?")
+        try:
+            self._current_action_desc = f"Resize Selection to {sw}×{sh}"
+            self._save_history()
+            layer = self.layers[self.current_layer_index] if self.current_layer_index is not None else None
+            if layer is None:
+                messagebox.showinfo("Resize Selection", "No active layer for selection.")
+                return
+            src_img = layer.original
+            bbox = sel_bbox
+            region = src_img.crop(bbox)
+            if keep_aspect:
+                rw, rh = region.size
+                scale = min(sw / rw, sh / rh)
+                tw = max(1, int(rw * scale))
+                th = max(1, int(rh * scale))
+            else:
+                tw, th = sw, sh
+            try:
+                resample = Image.Resampling.LANCZOS
+            except Exception:
+                resample = Image.ANTIALIAS
+            resized_region = region.resize((tw, th), resample)
+            float_img = Image.new("RGBA", src_img.size, (0, 0, 0, 0))
+            float_img.paste(resized_region, bbox[:2], resized_region)
+            float_layer = Layer(float_img, f"Selection {len(self.layers)}")
+            self.layers.append(float_layer)
+            self.current_layer_index = len(self.layers) - 1
+            self._refresh_layer_list()
+            self._update_composite()
+        except Exception as exc:
+            messagebox.showerror("Resize Selection", f"Failed: {exc}")
+
+    def _transform_rotate_custom_dialog(self) -> None:
+        angle = simpledialog.askstring(
+            "Rotate Custom",
+            "Enter angle in degrees (integer):",
+            parent=self,
+        )
+        if angle is None:
+            return
+        try:
+            degrees = int(angle)
+        except Exception:
+            messagebox.showerror("Rotate Custom", "Please enter a valid integer angle.")
+            return
+        self._current_action_desc = f"Rotate {degrees}°"
+        self._rotate_layer(degrees)
+        self._update_composite()
+
+    def _transform_scale_custom_dialog(self) -> None:
+        val = simpledialog.askstring(
+            "Scale Custom",
+            "Enter scale factor (e.g. 0.7 for 70%, 1.2 for 120%):",
+            parent=self,
+        )
+        if val is None:
+            return
+        try:
+            factor = float(val)
+        except Exception:
+            messagebox.showerror("Scale Custom", "Please enter a valid number for scale factor.")
+            return
+        if factor <= 0:
+            messagebox.showerror("Scale Custom", "Scale factor must be greater than zero.")
+            return
+        self._current_action_desc = f"Scale {factor}×"
+        self._scale_layer(factor)
+        self._update_composite()
 
     def _load_extensions(self) -> None:
         """Scan the extensions directory and load user extensions."""
